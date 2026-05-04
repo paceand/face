@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face & Hand & Audio Tracking - 测试界面</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            min-height: 100vh;
+            padding: 1rem;
+        }
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: #58a6ff;
+        }
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 1rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        @media (max-width: 900px) {
+            .layout { grid-template-columns: 1fr; }
+        }
+        .main-area {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .video-container {
+            position: relative;
+            background: #161b22;
+            border-radius: 12px;
+            overflow: hidden;
+            aspect-ratio: 16/10;
+        }
+        #video, #output {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        #output {
+            pointer-events: none;
+        }
+        .audio-visual {
+            background: #161b22;
+            border-radius: 12px;
+            padding: 1rem;
+            min-height: 160px;
+        }
+        .audio-visual h3 { font-size: 0.9rem; margin-bottom: 0.5rem; color: #8b949e; }
+        #audioCanvas {
+            width: 100%;
+            height: 120px;
+            background: #0d1117;
+            border-radius: 8px;
+        }
+        .controls {
+            background: #161b22;
+            border-radius: 12px;
+            padding: 1rem;
+            height: fit-content;
+            border: 1px solid #30363d;
+        }
+        .controls h2 {
+            font-size: 1rem;
+            color: #58a6ff;
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid #30363d;
+        }
+        .section { margin-bottom: 1.25rem; }
+        .section:last-child { margin-bottom: 0; }
+        .section-title {
+            font-size: 0.85rem;
+            color: #8b949e;
+            margin-bottom: 0.5rem;
+        }
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.4rem 0;
+            font-size: 0.9rem;
+        }
+        .toggle-row label { cursor: pointer; }
+        .toggle-row input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: #58a6ff;
+        }
+        .range-row {
+            padding: 0.4rem 0;
+            font-size: 0.9rem;
+        }
+        .range-row label {
+            display: block;
+            margin-bottom: 0.2rem;
+            color: #8b949e;
+        }
+        .range-row input[type="range"] {
+            width: 100%;
+            accent-color: #58a6ff;
+        }
+        .status {
+            font-size: 0.8rem;
+            color: #8b949e;
+            margin-top: 0.5rem;
+        }
+        .status.active { color: #3fb950; }
+        .status.error { color: #f85149; }
+        button {
+            background: #238636;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        button:hover { background: #2ea043; }
+        button.secondary {
+            background: #21262d;
+            color: #c9d1d9;
+        }
+        button.secondary:hover { background: #30363d; }
+        .btn-row { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+    </style>
+</head>
+<body>
+    <h1>Face & Hand & Audio 跟踪测试界面</h1>
+    <div class="layout">
+        <div class="main-area">
+            <div class="video-container">
+                <video id="video" playsinline muted></video>
+                <canvas id="output"></canvas>
+            </div>
+            <div class="audio-visual">
+                <h3>Audio 可视化</h3>
+                <canvas id="audioCanvas"></canvas>
+                <p class="status" id="audioStatus">未启用</p>
+            </div>
+        </div>
+        <div class="controls">
+            <h2>控制面板</h2>
+
+            <div class="section">
+                <div class="section-title">摄像头</div>
+                <div class="btn-row">
+                    <button id="btnStart">启动</button>
+                    <button id="btnStop" class="secondary">停止</button>
+                </div>
+                <p class="status" id="camStatus">未启动</p>
+            </div>
+
+            <div class="section">
+                <div class="section-title">Face 跟踪</div>
+                <div class="toggle-row">
+                    <label><input type="checkbox" id="faceEnabled" checked> 启用</label>
+                </div>
+                <div class="toggle-row">
+                    <label><input type="checkbox" id="faceMesh"> 显示 Mesh</label>
+                </div>
+                <div class="toggle-row">
+                    <label><input type="checkbox" id="faceContours" checked> 显示轮廓</label>
+                </div>
+                <div class="toggle-row">
+                    <label><input type="checkbox" id="faceRefineLandmarks"> 精细化 landmarks（虹膜）</label>
+                </div>
+                <div class="toggle-row">
+                    <label><input type="checkbox" id="faceIris"> 显示虹膜点</label>
+                </div>
+                <div class="toggle-row">
+                    <label><input type="checkbox" id="faceTesselation"> 显示三角网格</label>
+                </div>
+                <div class="range-row">
+                    <label>检测置信度: <span id="faceDetVal">0.5</span></label>
+                    <input type="range" id="faceDetConf" min="0.1" max="1" step="0.1" value="0.5">
+                </div>
+                <div class="range-row">
+                    <label>追踪置信度: <span id="faceTrackVal">0.5</span></label>
+                    <input type="range" id="faceTrackConf" min="0.1" max="1" step="0.1" value="0.5">
+                </div>
+                <div class="section" style="margin-top: 0.5rem;">
+                    <div class="section-title">飞吻爱心</div>
+                    <div class="toggle-row">
+                        <label><input type="checkbox" id="kissHeartsEnabled" checked> 噘嘴时从嘴里产生爱心</label>
+                    </div>
+                    <div class="range-row">
+                        <label>噘嘴灵敏度: <span id="kissSensVal">0.4</span></label>
+                        <input type="range" id="kissSens" min="0.2" max="0.8" step="0.05" value="0.4">
+                    </div>
+                </div>
+                <p class="status" id="faceStatus">未就绪</p>
+            </div>
+
+            <div class="section">
+                <div class="section-title">Hand 跟踪</div>
+                <div class="toggle-row">
+                    <label><input type="checkbox" id="handEnabled" checked> 启用</label>
+                </div>
+                <div class="toggle-row">
+                    <label><input type="checkbox" id="handLandmarks" checked> 显示关键点</label>
+                </div>
+                <div class="toggle-row">
+                    <label><input type="checkbox" id="handConnections" checked> 显示连线</label>
+                </div>
+                <div class="toggle-row">
+                    <label><input type="checkbox" id="handParticles" checked> 粒子特效（握拳聚拢 / 张开炸开）</label>
+                </div>
+                <div class="toggle-row">
+                    <label>手数量:
+                        <select id="handNum">
+                            <option value="1">1</option>
+                            <option value="2" selected>2</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="range-row">
+                    <label>检测置信度: <span id="handDetVal">0.5</span></label>
+                    <input type="range" id="handDetConf" min="0.1" max="1" step="0.1" value="0.5">
+                </div>
+                <div class="range-row">
+                    <label>追踪置信度: <span id="handTrackVal">0.5</span></label>
+                    <input type="range" id="handTrackConf" min="0.1" max="1" step="0.1" value="0.5">
+                </div>
+                <p class="status" id="handStatus">未就绪</p>
+            </div>
+
+            <div class="section">
+                <div class="section-title">Audio 跟踪</div>
+                <div class="toggle-row">
+                    <label><input type="checkbox" id="audioEnabled"> 启用麦克风</label>
+                </div>
+                <div class="toggle-row">
+                    <label><input type="checkbox" id="audioVolume" checked> 音量计</label>
+                </div>
+                <div class="toggle-row">
+                    <label><input type="checkbox" id="audioFreq" checked> 频谱</label>
+                </div>
+                <div class="toggle-row">
+                    <label><input type="checkbox" id="audioWaveform"> 波形</label>
+                </div>
+                <div class="range-row">
+                    <label>FFT 大小: <span id="fftVal">2048</span></label>
+                    <input type="range" id="fftSize" min="256" max="8192" step="256" value="2048">
+                </div>
+                <div class="range-row">
+                    <label>平滑: <span id="smoothVal">0.8</span></label>
+                    <input type="range" id="smoothing" min="0" max="1" step="0.1" value="0.8">
+                </div>
+                <p class="status" id="audioCtrlStatus">未启用</p>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        const WASM_PATH = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm';
+        const FACE_MODEL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
+        const HAND_MODEL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task';
+
+        const video = document.getElementById('video');
+        const output = document.getElementById('output');
+        const audioCanvas = document.getElementById('audioCanvas');
+        const ctx = output.getContext('2d');
+        const audioCtx = audioCanvas.getContext('2d');
+
+        let faceLandmarker = null;
+        let handLandmarker = null;
+        let stream = null;
+        let animId = null;
+        let faceResolver = null;
+        let handResolver = null;
+        let audioStream = null;
+        let audioContext = null;
+        let analyserNode = null;
+        let audioAnimId = null;
+
+        const FACE_CONTOURS = [
+            [10,338],[338,297],[297,332],[332,284],[284,251],[251,389],[389,356],[356,454],
+            [454,323],[323,361],[361,288],[288,397],[397,365],[365,379],[379,378],[378,400],
+            [400,377],[377,152],[152,148],[148,176],[176,149],[149,150],[150,136],[136,172],
+            [172,58],[58,132],[132,93],[93,234],[234,127],[127,162],[162,21],[21,54],[54,103],
+            [103,67],[67,109],[109,10]
+        ];
+
+        const HEART_GLYPHS = ['❤', '💕', '💗', '❤️', '💖'];
+        let heartParticles = [];
+        let lastKissTime = 0;
+        const KISS_COOLDOWN_MS = 500;
+
+        function getBlendshape(blendshapes, name) {
+            if (!blendshapes || !Array.isArray(blendshapes)) return 0;
+            const b = blendshapes.find(bb => bb && bb.categoryName === name);
+            return b ? b.score : 0;
+        }
+
+        function getMouthPos(landmarks, w, h) {
+            if (!landmarks || landmarks.length < 300) return null;
+            const idx = [61, 291, 13, 14];
+            let sx = 0, sy = 0, n = 0;
+            idx.forEach(i => {
+                if (landmarks[i]) { sx += landmarks[i].x; sy += landmarks[i].y; n++; }
+            });
+            if (n === 0) return null;
+            return { x: (sx / n) * w, y: (sy / n) * h };
+        }
+
+        function spawnHearts(mouthPos, w, h) {
+            const n = 4 + Math.floor(Math.random() * 4);
+            for (let i = 0; i < n; i++) {
+                const angle = Math.PI * 0.5 + (Math.random() - 0.5) * Math.PI * 0.7;
+                const speed = 0.28 + Math.random() * 0.2;
+                const side = Math.random() > 0.5 ? 1 : -1;
+                heartParticles.push({
+                    x: mouthPos.x + (Math.random() - 0.5) * 48,
+                    y: mouthPos.y + (Math.random() - 0.5) * 16,
+                    vx: Math.cos(angle) * speed * w * side,
+                    vy: -Math.abs(Math.sin(angle)) * speed * h - 8,
+                    life: 1,
+                    size: 18 + Math.random() * 20,
+                    glyph: HEART_GLYPHS[Math.floor(Math.random() * HEART_GLYPHS.length)],
+                    rotation: (Math.random() - 0.5) * Math.PI,
+                    rotationSpeed: (Math.random() - 0.5) * 4
+                });
+            }
+        }
+
+        function updateAndDrawHearts(w, h) {
+            if (!document.getElementById('kissHeartsEnabled') || !document.getElementById('kissHeartsEnabled').checked) {
+                // 關閉時仍每幀更新粒子，避免復用時殘影
+                const dt = 0.016;
+                for (let i = heartParticles.length - 1; i >= 0; i--) {
+                    const hh = heartParticles[i];
+                    hh.x += hh.vx * dt;
+                    hh.y += hh.vy * dt;
+                    hh.vy += 320 * dt;
+                    hh.life -= 0.018;
+                    if (hh.rotationSpeed) hh.rotation += hh.rotationSpeed * dt;
+                    if (hh.life <= 0) heartParticles.splice(i, 1);
+                }
+                return;
+            }
+            const dt = 0.016;
+            for (let i = heartParticles.length - 1; i >= 0; i--) {
+                const hh = heartParticles[i];
+                hh.x += hh.vx * dt;
+                hh.y += hh.vy * dt;
+                hh.vy += 320 * dt;
+                hh.life -= 0.018;
+                if (hh.rotationSpeed !== undefined) hh.rotation += hh.rotationSpeed * dt;
+                if (hh.life <= 0) {
+                    heartParticles.splice(i, 1);
+                    continue;
+                }
+                // 縮放：剛出現時略放大，消失時縮小
+                const scale = hh.life * (0.85 + 0.15 * (1 - hh.life));
+                const size = hh.size * scale;
+                ctx.save();
+                ctx.globalAlpha = hh.life;
+                ctx.translate(hh.x, hh.y);
+                if (typeof hh.rotation === 'number') ctx.rotate(hh.rotation);
+                ctx.font = `${size}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(hh.glyph, 0, 0);
+                ctx.restore();
+            }
+        }
+
+        async function loadFaceLandmarker() {
+            if (faceLandmarker) return faceLandmarker;
+            const { FaceLandmarker, FilesetResolver } = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14');
+            faceResolver = await FilesetResolver.forVisionTasks(WASM_PATH);
+            const opts = {
+                baseOptions: { modelAssetPath: FACE_MODEL },
+                outputFaceBlendshapes: true,
+                outputFacialTransformationMatrixes: false,
+                runningMode: 'VIDEO',
+                numFaces: 2,
+                minFaceDetectionConfidence: parseFloat(document.getElementById('faceDetConf').value),
+                minFacePresenceConfidence: parseFloat(document.getElementById('faceTrackConf').value),
+                minTrackingConfidence: parseFloat(document.getElementById('faceTrackConf').value),
+            };
+            const refEl = document.getElementById('faceRefineLandmarks');
+            if (refEl && refEl.checked) opts.refineLandmarks = true;
+            faceLandmarker = await FaceLandmarker.createFromOptions(faceResolver, opts);
+            document.getElementById('faceStatus').textContent = '已加载';
+            return faceLandmarker;
+        }
+
+        async function loadHandLandmarker() {
+            if (handLandmarker) return handLandmarker;
+            const { HandLandmarker, FilesetResolver } = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14');
+            handResolver = await FilesetResolver.forVisionTasks(WASM_PATH);
+            handLandmarker = await HandLandmarker.createFromOptions(handResolver, {
+                baseOptions: { modelAssetPath: HAND_MODEL },
+                runningMode: 'VIDEO',
+                numHands: parseInt(document.getElementById('handNum').value),
+                minHandDetectionConfidence: parseFloat(document.getElementById('handDetConf').value),
+                minHandPresenceConfidence: parseFloat(document.getElementById('handTrackConf').value),
+                minTrackingConfidence: parseFloat(document.getElementById('handTrackConf').value),
+            });
+            document.getElementById('handStatus').textContent = '已加载';
+            return handLandmarker;
+        }
+
+        function drawFace(results, w, h) {
+            if (!document.getElementById('faceEnabled').checked || !results.faceLandmarks) return;
+            const showMesh = document.getElementById('faceMesh').checked;
+            const showContours = document.getElementById('faceContours').checked;
+            const showIris = document.getElementById('faceIris').checked;
+            const showTess = document.getElementById('faceTesselation').checked;
+
+            for (const landmarks of results.faceLandmarks) {
+                ctx.strokeStyle = '#00ff88';
+                ctx.fillStyle = '#00ff8833';
+                ctx.lineWidth = 1;
+
+                if (showMesh || showTess) {
+                    ctx.beginPath();
+                    for (let i = 0; i < landmarks.length; i++) {
+                        const x = landmarks[i].x * w;
+                        const y = landmarks[i].y * h;
+                        if (i === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    }
+                    ctx.closePath();
+                    if (showMesh) ctx.stroke();
+                    if (showTess) ctx.fill();
+                }
+
+                if (showContours) {
+                    ctx.strokeStyle = '#00ff88';
+                    ctx.beginPath();
+                    for (const [a, b] of FACE_CONTOURS) {
+                        if (a < landmarks.length && b < landmarks.length) {
+                            ctx.moveTo(landmarks[a].x * w, landmarks[a].y * h);
+                            ctx.lineTo(landmarks[b].x * w, landmarks[b].y * h);
+                        }
+                    }
+                    ctx.stroke();
+                }
+
+                if (showIris && landmarks.length >= 478) {
+                    ctx.fillStyle = '#ffaa00';
+                    for (let i = 468; i < Math.min(478, landmarks.length); i++) {
+                        ctx.beginPath();
+                        ctx.arc(landmarks[i].x * w, landmarks[i].y * h, 2, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+
+                if (!showMesh && !showTess) {
+                    ctx.fillStyle = '#00ff88';
+                    for (const lm of landmarks.slice(0, 468)) {
+                        ctx.beginPath();
+                        ctx.arc(lm.x * w, lm.y * h, 2, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+            }
+        }
+
+        const HAND_CONNECTIONS = [
+            [0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[0,9],[9,10],[10,11],[11,12],
+            [0,13],[13,14],[14,15],[15,16],[0,17],[17,18],[18,19],[19,20],[5,9],[9,13],[13,17]
+        ];
+
+        const FINGER_TIPS = [4, 8, 12, 16, 20];
+        const PARTICLE_COUNT = 180;
+
+        let particles = [];
+        function initParticles(w, h) {
+            particles = [];
+            for (let i = 0; i < PARTICLE_COUNT; i++) {
+                particles.push({
+                    x: Math.random() * w,
+                    y: Math.random() * h,
+                    vx: 0, vy: 0,
+                    hue: Math.random() * 60 + 180
+                });
+            }
+        }
+
+        function isFist(hand) {
+            const wrist = hand[0];
+            let totalDist = 0;
+            for (const idx of FINGER_TIPS) {
+                const d = Math.hypot(hand[idx].x - wrist.x, hand[idx].y - wrist.y);
+                totalDist += d;
+            }
+            const avgDist = totalDist / 5;
+            return avgDist < 0.18;
+        }
+
+        function updateAndDrawParticles(handResults, w, h) {
+            if (!document.getElementById('handParticles').checked || !document.getElementById('handEnabled').checked) return;
+            if (particles.length === 0 || particles.length !== PARTICLE_COUNT) initParticles(w, h);
+
+            const GATHER_STRENGTH = 0.08;
+            const EXPLODE_STRENGTH = 0.12;
+            const FRICTION = 0.92;
+
+            if (handResults && handResults.landmarks && handResults.landmarks.length > 0) {
+                const hand = handResults.landmarks[0];
+                const palmX = (hand[0].x + hand[5].x + hand[9].x) / 3 * w;
+                const palmY = (hand[0].y + hand[5].y + hand[9].y) / 3 * h;
+                const tips = FINGER_TIPS.map(i => ({ x: hand[i].x * w, y: hand[i].y * h }));
+                const fist = isFist(hand);
+
+                for (const p of particles) {
+                        let ax = 0, ay = 0;
+                        if (fist) {
+                            const dx = palmX - p.x, dy = palmY - p.y;
+                            const dist = Math.hypot(dx, dy) || 0.001;
+                            ax += (dx / dist) * GATHER_STRENGTH;
+                            ay += (dy / dist) * GATHER_STRENGTH;
+                        } else {
+                            const cx = tips.reduce((s, t) => s + t.x, 0) / 5;
+                            const cy = tips.reduce((s, t) => s + t.y, 0) / 5;
+                            const dx = p.x - cx, dy = p.y - cy;
+                            const dist = Math.hypot(dx, dy) || 0.001;
+                            ax += (dx / dist) * EXPLODE_STRENGTH;
+                            ay += (dy / dist) * EXPLODE_STRENGTH;
+                        }
+                        p.vx = (p.vx + ax) * FRICTION;
+                        p.vy = (p.vy + ay) * FRICTION;
+                        p.x += p.vx;
+                        p.y += p.vy;
+                        if (p.x < 0 || p.x > w || p.y < 0 || p.y > h) {
+                            p.x = Math.random() * w;
+                            p.y = Math.random() * h;
+                            p.vx = p.vy = 0;
+                        }
+                }
+            } else {
+                for (const p of particles) {
+                    p.vx *= FRICTION;
+                    p.vy *= FRICTION;
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    if (p.x < 0 || p.x > w) p.vx *= -1;
+                    if (p.y < 0 || p.y > h) p.vy *= -1;
+                    p.x = Math.max(0, Math.min(w, p.x));
+                    p.y = Math.max(0, Math.min(h, p.y));
+                }
+            }
+
+            ctx.globalCompositeOperation = 'lighter';
+            for (const p of particles) {
+                ctx.fillStyle = `hsla(${p.hue}, 80%, 60%, 0.7)`;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalCompositeOperation = 'source-over';
+        }
+
+        function drawHand(results, w, h) {
+            if (!document.getElementById('handEnabled').checked || !results.landmarks) return;
+            const showLandmarks = document.getElementById('handLandmarks').checked;
+            const showConnections = document.getElementById('handConnections').checked;
+
+            const colors = ['#ff6b6b', '#4ecdc4'];
+            results.landmarks.forEach((hand, idx) => {
+                ctx.strokeStyle = colors[idx % 2];
+                ctx.fillStyle = colors[idx % 2] + '99';
+
+                if (showConnections) {
+                    for (const [a, b] of HAND_CONNECTIONS) {
+                        ctx.beginPath();
+                        ctx.moveTo(hand[a].x * w, hand[a].y * h);
+                        ctx.lineTo(hand[b].x * w, hand[b].y * h);
+                        ctx.stroke();
+                    }
+                }
+                if (showLandmarks) {
+                    for (const lm of hand) {
+                        ctx.beginPath();
+                        ctx.arc(lm.x * w, lm.y * h, 4, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+            });
+        }
+
+        function detect() {
+            if (!stream || video.readyState < 2) return;
+            const w = output.width = video.videoWidth;
+            const h = output.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
+
+            // 每幀同步更新並繪製愛心，避免被下一幀清掉，動畫才流暢
+            updateAndDrawHearts(w, h);
+
+            (async () => {
+                const ts = performance.now();
+                try {
+                    if (document.getElementById('faceEnabled').checked && faceLandmarker) {
+                        const faceRes = faceLandmarker.detectForVideo(video, ts);
+                        drawFace(faceRes, w, h);
+                        if (document.getElementById('kissHeartsEnabled').checked && faceRes.faceLandmarks && faceRes.faceLandmarks[0]) {
+                            const landmarks = faceRes.faceLandmarks[0];
+                            const blendshapes = faceRes.faceBlendshapes && faceRes.faceBlendshapes[0];
+                            const pucker = getBlendshape(blendshapes, 'mouthPucker');
+                            const threshold = parseFloat(document.getElementById('kissSens').value);
+                            const mouthPos = getMouthPos(landmarks, w, h);
+                            const now = performance.now() / 1000;
+                            if (pucker >= threshold && mouthPos && (now - lastKissTime) >= KISS_COOLDOWN_MS / 1000) {
+                                lastKissTime = now;
+                                spawnHearts(mouthPos, w, h);
+                            }
+                        }
+                    }
+                    if (document.getElementById('handEnabled').checked && handLandmarker) {
+                        const handRes = handLandmarker.detectForVideo(video, ts);
+                        drawHand(handRes, w, h);
+                        updateAndDrawParticles(handRes, w, h);
+                    }
+                } catch (e) {
+                    console.warn(e);
+                }
+            })();
+
+            animId = requestAnimationFrame(detect);
+        }
+
+        async function startCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: 1280, height: 720 }
+                });
+                video.srcObject = stream;
+                await video.play();
+                document.getElementById('camStatus').textContent = '运行中';
+                document.getElementById('camStatus').className = 'status active';
+
+                if (document.getElementById('faceEnabled').checked) {
+                    document.getElementById('faceStatus').textContent = '加载中...';
+                    await loadFaceLandmarker();
+                }
+                if (document.getElementById('handEnabled').checked) {
+                    document.getElementById('handStatus').textContent = '加载中...';
+                    await loadHandLandmarker();
+                }
+                detect();
+            } catch (e) {
+                document.getElementById('camStatus').textContent = '错误: ' + e.message;
+                document.getElementById('camStatus').className = 'status error';
+            }
+        }
+
+        function stopCamera() {
+            if (animId) cancelAnimationFrame(animId);
+            animId = null;
+            if (stream) stream.getTracks().forEach(t => t.stop());
+            stream = null;
+            video.srcObject = null;
+            document.getElementById('camStatus').textContent = '已停止';
+            document.getElementById('camStatus').className = 'status';
+        }
+
+        document.getElementById('btnStart').onclick = startCamera;
+        document.getElementById('btnStop').onclick = stopCamera;
+
+        document.getElementById('faceDetConf').oninput = e => {
+            document.getElementById('faceDetVal').textContent = e.target.value;
+        };
+        document.getElementById('faceTrackConf').oninput = e => {
+            document.getElementById('faceTrackVal').textContent = e.target.value;
+        };
+        document.getElementById('kissSens').oninput = e => {
+            document.getElementById('kissSensVal').textContent = e.target.value;
+        };
+        document.getElementById('handDetConf').oninput = e => {
+            document.getElementById('handDetVal').textContent = e.target.value;
+        };
+        document.getElementById('handTrackConf').oninput = e => {
+            document.getElementById('handTrackVal').textContent = e.target.value;
+        };
+        document.getElementById('fftSize').oninput = e => {
+            document.getElementById('fftVal').textContent = e.target.value;
+            if (analyserNode) analyserNode.fftSize = parseInt(e.target.value);
+        };
+        document.getElementById('smoothing').oninput = e => {
+            document.getElementById('smoothVal').textContent = e.target.value;
+            if (analyserNode) analyserNode.smoothingTimeConstant = parseFloat(e.target.value);
+        };
+
+        async function startAudio() {
+            if (!document.getElementById('audioEnabled').checked) return;
+            try {
+                audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const src = audioContext.createMediaStreamSource(audioStream);
+                analyserNode = audioContext.createAnalyser();
+                analyserNode.fftSize = parseInt(document.getElementById('fftSize').value);
+                analyserNode.smoothingTimeConstant = parseFloat(document.getElementById('smoothing').value);
+                analyserNode.minDecibels = -90;
+                analyserNode.maxDecibels = -10;
+                src.connect(analyserNode);
+
+                document.getElementById('audioStatus').textContent = '运行中';
+                document.getElementById('audioStatus').className = 'status active';
+                document.getElementById('audioCtrlStatus').textContent = '运行中';
+                document.getElementById('audioCtrlStatus').className = 'status active';
+                drawAudio();
+            } catch (e) {
+                document.getElementById('audioStatus').textContent = '错误: ' + e.message;
+                document.getElementById('audioStatus').className = 'status error';
+            }
+        }
+
+        function stopAudio() {
+            if (audioAnimId) cancelAnimationFrame(audioAnimId);
+            audioAnimId = null;
+            if (audioStream) audioStream.getTracks().forEach(t => t.stop());
+            audioStream = null;
+            audioContext = null;
+            analyserNode = null;
+            document.getElementById('audioStatus').textContent = '未启用';
+            document.getElementById('audioStatus').className = 'status';
+            document.getElementById('audioCtrlStatus').textContent = '未启用';
+            document.getElementById('audioCtrlStatus').className = 'status';
+        }
+
+        function drawAudio() {
+            const w = audioCanvas.width = audioCanvas.offsetWidth;
+            const h = audioCanvas.height = 120;
+            audioCtx.fillStyle = '#0d1117';
+            audioCtx.fillRect(0, 0, w, h);
+
+            if (!analyserNode || !document.getElementById('audioEnabled').checked) {
+                audioAnimId = requestAnimationFrame(drawAudio);
+                return;
+            }
+
+            const showVolume = document.getElementById('audioVolume').checked;
+            const showFreq = document.getElementById('audioFreq').checked;
+            const showWaveform = document.getElementById('audioWaveform').checked;
+
+            if (showVolume) {
+                const data = new Uint8Array(analyserNode.frequencyBinCount);
+                analyserNode.getByteFrequencyData(data);
+                const avg = data.reduce((a, b) => a + b, 0) / data.length;
+                const barW = Math.min(w * (avg / 255), w);
+                audioCtx.fillStyle = '#238636';
+                audioCtx.fillRect(0, h - 20, barW, 20);
+                audioCtx.fillStyle = '#c9d1d9';
+                audioCtx.font = '12px monospace';
+                audioCtx.fillText('Volume: ' + Math.round(avg) + '/255', 8, h - 6);
+            }
+
+            if (showFreq) {
+                const data = new Uint8Array(analyserNode.frequencyBinCount);
+                analyserNode.getByteFrequencyData(data);
+                const step = data.length / w;
+                audioCtx.strokeStyle = '#58a6ff';
+                audioCtx.lineWidth = 1;
+                audioCtx.beginPath();
+                for (let i = 0; i < w; i++) {
+                    const idx = Math.floor(i * step);
+                    const val = (255 - data[idx]) / 255 * h * 0.8;
+                    if (i === 0) audioCtx.moveTo(i, val);
+                    else audioCtx.lineTo(i, val);
+                }
+                audioCtx.stroke();
+            }
+
+            if (showWaveform) {
+                const data = new Uint8Array(analyserNode.fftSize);
+                analyserNode.getByteTimeDomainData(data);
+                audioCtx.strokeStyle = '#f85149';
+                audioCtx.lineWidth = 1;
+                audioCtx.beginPath();
+                for (let i = 0; i < w; i++) {
+                    const idx = Math.floor((i / w) * data.length);
+                    const val = (data[idx] / 255) * h * 0.5 + h * 0.25;
+                    if (i === 0) audioCtx.moveTo(i, val);
+                    else audioCtx.lineTo(i, val);
+                }
+                audioCtx.stroke();
+            }
+
+            audioAnimId = requestAnimationFrame(drawAudio);
+        }
+
+        document.getElementById('audioEnabled').onchange = e => {
+            if (e.target.checked) startAudio();
+            else stopAudio();
+        };
+
+        drawAudio();
+    </script>
+</body>
+</html>
